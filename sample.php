@@ -16,8 +16,8 @@ require_once("DropboxClient.php");
 
 // you have to create an app at https://www.dropbox.com/developers/apps and enter details below:
 $dropbox = new DropboxClient(array(
-	'app_key' => "6gjbij0b95jqul8", 
-	'app_secret' => "t1g8jps6ch5idso",
+	'app_key' => "", 
+	'app_secret' => "",
 	'app_full_access' => false,
 ),'en');
 
@@ -64,7 +64,7 @@ if(!empty($files)) {
 	$file = reset($files);
 	$test_file = "test_download_".basename($file->path);
 	
-	echo "\r\n\r\n<b>Meta data of $file->path:</b>\r\n";
+	echo "\r\n\r\n<b>Meta data of <a href='".$dropbox->GetLink($file)."'>$file->path</a>:</b>\r\n";
 	print_r($dropbox->GetMetadata($file->path));
 	
 	echo "\r\n\r\n<b>Downloading $file->path:</b>\r\n";
@@ -72,6 +72,7 @@ if(!empty($files)) {
 		
 	echo "\r\n\r\n<b>Uploading $test_file:</b>\r\n";
 	print_r($dropbox->UploadFile($test_file));
+	echo "\r\n done!";
 }
 
 

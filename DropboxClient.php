@@ -4,12 +4,11 @@
  *
  * http://fabi.me/en/php-projects/dropphp-dropbox-api-client/
  * 
- * For changelog see changes.txt
  * 
  * @author     Fabian Schlieper <fabian@fabi.me>
  * @copyright  Fabian Schlieper 2012
- * @version    1.1
- * @license    See license.txt
+ * @version    1.2
+ * @license    See LICENSE
  *
  */
  
@@ -20,7 +19,7 @@ class DropboxClient {
 	const API_URL = "https://api.dropbox.com/1/";
 	const API_CONTENT_URL = "http://api-content.dropbox.com/1/";
 	
-	const BUFFER_SIZE = 524288;
+	const BUFFER_SIZE = 4096;
 	
 	const MAX_UPLOAD_CHUNK_SIZE = 150000000; // 150MB
 
@@ -204,7 +203,7 @@ class DropboxClient {
 		elseif(is_object($dropbox_path) && !empty($dropbox_path->path)) $dropbox_path = $dropbox_path->path;
 			
 		$query = http_build_query(array_merge(compact('overwrite', 'parent_rev'), array('locale' => $this->locale)),'','&');
-		$url = $this->cleanUrl(self::API_CONTENT_URL."/files_put/$this->rootPath/$dropbox_path?$query");
+		$url = $this->cleanUrl(self::API_CONTENT_URL."/files_put/$this->rootPath/$dropbox_path")."?$query";
 		
 		$content =& file_get_contents($src_file);
 		if(strlen($content) == 0)
@@ -315,16 +314,17 @@ class DropboxClient {
 		
 		// check for query vars in url and add them to oauth parameters
 		$query = strrchr($url,'?');
-		if(!empty($query))
+		if(!empty($query)) {
 			$oauth->setParameters(substr($query,1));
+			$url = substr($url, 0, -strlen($query));
+		}
 		
 		$signed = $oauth->sign(array(
 			'action' => $method,
-            'path'=> $url));		
-		$http_context['header'] .= "Authorization: ".$signed['header']."\r\n";
+            'path'=> $url));
+		//print_r($signed);	
 		
-		//echo "<br><br>SBS: $signed[sbs]<br><br>";	
-		//print_r($http_context);
+		$http_context['header'] .= "Authorization: ".$signed['header']."\r\n";
 		
 		return stream_context_create(array('http'=>$http_context));
 	}

@@ -11,6 +11,12 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.2 =
+* Fixed query string parameters issues
+* Added GetLink() to sample.php
+* UploadFile fixed
+* Decreased buffer size
+
 = 1.1 =
 * Added parameter $get_new_token to GetRequestToken
 * DownloadFile now accepts a callback to report progress during download
