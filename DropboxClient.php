@@ -205,7 +205,7 @@ class DropboxClient {
 		$query = http_build_query(array_merge(compact('overwrite', 'parent_rev'), array('locale' => $this->locale)),'','&');
 		$url = $this->cleanUrl(self::API_CONTENT_URL."/files_put/$this->rootPath/$dropbox_path")."?$query";
 		
-		$content =& file_get_contents($src_file);
+		$content = file_get_contents($src_file);
 		if(strlen($content) == 0)
 			throw new DropboxException("Could not read file $src_file or file is empty!");
 			
