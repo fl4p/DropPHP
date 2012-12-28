@@ -7,7 +7,7 @@
  * 
  * @author     Fabian Schlieper <fabian@fabi.me>
  * @copyright  Fabian Schlieper 2012
- * @version    1.2
+ * @version    1.3
  * @license    See LICENSE
  *
  */
@@ -32,15 +32,27 @@ class DropboxClient {
 	private $locale;
 	private $rootPath;
 	
+	private $useCurl;
+	
 	function __construct ($app_params, $locale = "en"){
 		$this->appParams = $app_params;
+		if(empty($app_params['app_key']))
+			throw new DropboxException("App Key is empty!");
+		
 		$this->consumerToken = array('t' => $this->appParams['app_key'], 's' => $this->appParams['app_secret']);		
 		$this->locale = $locale;
 		$this->rootPath = empty($app_params['app_full_access']) ? "sandbox" : "dropbox";
 		
 		$this->requestToken = null;
 		$this->accessToken = null;
-	}	
+		
+		$this->useCurl = function_exists('curl_init');
+	}
+	
+	function SetUseCUrl($use_it)
+	{
+		$this->useCurl = $use_it && function_exists('curl_init');
+	}
 	
 	// ##################################################
 	// Authorization
@@ -51,7 +63,7 @@ class DropboxClient {
 			return $this->requestToken;
 		
 		$rt = $this->authCall("oauth/request_token");
-		if(empty($rt))
+		if(empty($rt) || empty($rt['oauth_token']))
 			throw new DropboxException('Could not get request token!');
 
 		return ($this->requestToken = array('t'=>$rt['oauth_token'], 's'=>$rt['oauth_token_secret']));
@@ -86,7 +98,7 @@ class DropboxClient {
 	public function BuildAuthorizeUrl($return_url)
 	{
 		$rt = $this->GetRequestToken();		
-		if(empty($rt)) return false;		
+		if(empty($rt) || empty($rt['t'])) throw new DropboxException('Request Token Invalid ('.print_r($rt,true).').');
 		return "https://www.dropbox.com/1/oauth/authorize?oauth_token=".$rt['t']."&oauth_callback=".urlencode($return_url);
 	}
 	
@@ -144,7 +156,8 @@ class DropboxClient {
 	 */	
 	public function DownloadFile($dropbox_file, $dest_path='', $rev=null, $progress_changed_callback = null)
 	{
-		if(is_object($dropbox_file) && !empty($dropbox_file->path)) $dropbox_file = $dropbox_file->path;
+		if(is_object($dropbox_file) && !empty($dropbox_file->path))
+			$dropbox_file = $dropbox_file->path;
 		
 		if(empty($dest_path)) $dest_path = basename($dropbox_file);
 		
@@ -152,33 +165,46 @@ class DropboxClient {
 		$content = (!empty($rev)) ? http_build_query(array('rev' => $rev),'','&') : null;
 		$context = $this->createRequestContext($url, "GET", $content);
 
-		$rh = @fopen($url, 'rb', false, $context); // read binary
-		if($rh === false)
-			throw new DropboxException("HTTP request to $url failed!");
 		$fh = @fopen($dest_path, 'wb'); // write binary
 		if($fh === false) {
 			@fclose($rh);
 			throw new DropboxException("Could not create file $dest_path !");
 		}
 		
-		// get file meta from HTTP header
-		$s_meta = stream_get_meta_data($rh);		
-		$meta = json_decode(substr(reset(array_filter($s_meta['wrapper_data'], create_function('$s', 'return strpos($s, "x-dropbox-metadata:") === 0;'))), 20));
-		$bytes_loaded = 0;
-		while (!feof($rh)) {
-		  if(($s=fwrite($fh, fread($rh, self::BUFFER_SIZE))) === false) {
-			@fclose($rh);
-			@fclose($fh);
-			throw new DropboxException("Writing to file $dest_path failed!'");
-		  }
-		  $bytes_loaded += $s;
-		  if(!empty($progress_changed_callback)) {
-		  	call_user_func($progress_changed_callback, $bytes_loaded, $meta->bytes);
-		  }
-		}
+		if($this->useCurl) {
+			curl_setopt($context, CURLOPT_BINARYTRANSFER, true);
+			curl_setopt($context, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($context, CURLOPT_FILE, $fh);
+			$response_headers = array();
+			self::execCurlAndClose($context, $response_headers);
+			fclose($fh);
+			$meta = self::getMetaFromHeaders($response_headers);
+			$bytes_loaded = filesize($dest_path);
+		} else {
+			$rh = @fopen($url, 'rb', false, $context); // read binary
+			if($rh === false)
+				throw new DropboxException("HTTP request to $url failed!");
 				
-		fclose($rh);
-		fclose($fh);
+			
+			// get file meta from HTTP header
+			$s_meta = stream_get_meta_data($rh);
+			$meta = self::getMetaFromHeaders($s_meta['wrapper_data']);
+			$bytes_loaded = 0;
+			while (!feof($rh)) {
+			  if(($s=fwrite($fh, fread($rh, self::BUFFER_SIZE))) === false) {
+				@fclose($rh);
+				@fclose($fh);
+				throw new DropboxException("Writing to file $dest_path failed!'");
+			  }
+			  $bytes_loaded += $s;
+			  if(!empty($progress_changed_callback)) {
+			  	call_user_func($progress_changed_callback, $bytes_loaded, $meta->bytes);
+			  }
+			}
+					
+			fclose($rh);
+			fclose($fh);
+		}
 		
 		if($meta->bytes != $bytes_loaded)
 			throw new DropboxException("Download size mismatch!");
@@ -205,13 +231,31 @@ class DropboxClient {
 		$query = http_build_query(array_merge(compact('overwrite', 'parent_rev'), array('locale' => $this->locale)),'','&');
 		$url = $this->cleanUrl(self::API_CONTENT_URL."/files_put/$this->rootPath/$dropbox_path")."?$query";
 		
-		$content = file_get_contents($src_file);
-		if(strlen($content) == 0)
-			throw new DropboxException("Could not read file $src_file or file is empty!");
-			
-		$context = $this->createRequestContext($url, "PUT", $content);
+		$prev_useCurl = $this->useCurl;
+		$this->useCurl = false;
 		
-		return json_decode(file_get_contents($url, false, $context));
+		if($this->useCurl) {
+			throw new DropboxException("Upload does not work yet!");
+			$context = $this->createRequestContext($url, "PUT");
+			curl_setopt($context, CURLOPT_BINARYTRANSFER, true);
+			$fh = fopen($src_file, 'rb');
+			curl_setopt($context, CURLOPT_INFILE, $fh); // file pointer
+			curl_setopt($context, CURLOPT_INFILESIZE, filesize($src_file));
+			$context = $this->createRequestContext($url, "PUT", $content);
+			$meta = json_decode(self::execCurlAndClose($context));
+			fclose($fh);
+			return $meta;
+		} else {
+			$content = file_get_contents($src_file);
+			if(strlen($content) == 0)
+				throw new DropboxException("Could not read file $src_file or file is empty!");
+				
+			$context = $this->createRequestContext($url, "PUT", $content);
+			
+			$this->useCurl = $prev_useCurl;
+			
+			return json_decode(file_get_contents($url, false, $context));
+		}
 	}
 	
 	
@@ -274,6 +318,8 @@ class DropboxClient {
 		
 		if(empty($dir) || !is_object($dir)) return false;
 		
+		if(!empty($dir->error)) throw new DropboxException($dir->error);
+		
 		foreach($dir->contents as $item)
 		{
 			$files[trim($item->path,'/')] = $item;
@@ -286,11 +332,60 @@ class DropboxClient {
 		return $files;
 	}
 	
-	function createRequestContext($url, $method, &$content, $oauth_token=-1)
+	function createCurl($url, $http_context)
+	{
+		$ch = curl_init($url);
+		
+		$curl_opts = array(
+				CURLOPT_HEADER => false, // exclude header from output
+				//CURLOPT_MUTE => true, // no output!
+				CURLOPT_RETURNTRANSFER => true, // but return!
+				CURLOPT_SSL_VERIFYPEER => false,
+		);
+		
+		$curl_opts[CURLOPT_CUSTOMREQUEST] = $http_context['method']; 
+		
+		if(!empty($http_context['content'])) {
+			$curl_opts[CURLOPT_POSTFIELDS] =& $http_context['content'];
+			if(defined("CURLOPT_POSTFIELDSIZE"))
+				$curl_opts[CURLOPT_POSTFIELDSIZE] = strlen($http_context['content']);
+		}
+		
+		$curl_opts[CURLOPT_HTTPHEADER] = array_map('trim',explode("\n",$http_context['header']));
+		
+		curl_setopt_array($ch, $curl_opts);
+		return $ch;
+	}
+	
+	static private $_curlHeadersRef;
+	static function _curlHeaderCallback($ch, $header)
+	{
+		self::$_curlHeadersRef[] = trim($header);
+		return strlen($header);
+	}
+	
+	static function &execCurlAndClose($ch, &$out_response_headers = null)
+	{
+		if(is_array($out_response_headers)) {
+			self::$_curlHeadersRef =& $out_response_headers;
+			curl_setopt($ch, CURLOPT_HEADERFUNCTION, array(__CLASS__, '_curlHeaderCallback'));
+		}
+		$res = curl_exec($ch);
+		$err_no = curl_errno($ch);
+		$err_str = curl_error($ch);
+		curl_close($ch);
+		if($err_no || $res === false) {
+			throw new DropboxException("cURL-Error ($err_no): $err_str");
+		}
+		
+		return $res;
+	}
+	
+	function createRequestContext($url, $method, &$content=null, $oauth_token=-1)
 	{
 		if($oauth_token === -1)
-			$oauth_token = $this->accessToken;
-			
+			$oauth_token = $this->accessToken;				 
+
 		$http_context = array('method'=>$method, 'header'=> '');
 		
 		$oauth = new OAuthSimple($this->consumerToken['t'],$this->consumerToken['s']);
@@ -310,6 +405,10 @@ class DropboxClient {
 			$http_context['content'] =& $content;			
 			if($post_vars)
 				$oauth->setParameters($content);
+		} elseif($method == "POST") {
+			// make sure that content-length is always set when post request (otherwise some wrappers fail!)
+			$http_context['content'] = "";
+			$http_context['header'] .= "Content-Length: 0\r\n";
 		}
 		
 		// check for query vars in url and add them to oauth parameters
@@ -326,16 +425,18 @@ class DropboxClient {
 		
 		$http_context['header'] .= "Authorization: ".$signed['header']."\r\n";
 		
-		return stream_context_create(array('http'=>$http_context));
+		return $this->useCurl ? $this->createCurl($url, $http_context) : stream_context_create(array('http'=>$http_context));
 	}
 	
 	function authCall($path, $request_token=null)
 	{
 		$url = $this->cleanUrl(self::API_URL.$path);
 		$dummy = null;
-		$context = $this->createRequestContext($url, "POST", $dummy, $request_token);	
+		$context = $this->createRequestContext($url, "POST", $dummy, $request_token);
+		
+		$contents = $this->useCurl ? self::execCurlAndClose($context) : file_get_contents($url, false, $context);
 		$data = array();
-		parse_str(file_get_contents($url, false, $context), $data);
+		parse_str($contents, $data);
 		return $data;
 	}
 	
@@ -345,10 +446,16 @@ class DropboxClient {
 		$url = $this->cleanUrl(self::API_URL.$path);
 		$content = http_build_query(array_merge(array('locale'=>$this->locale), $params),'','&');
 		$context = $this->createRequestContext($url, $method, $content);
-		$json = file_get_contents($url, false, $context);
+		$json = $this->useCurl ? self::execCurlAndClose($context) : file_get_contents($url, false, $context);
 		//if($json === false)
 //			throw new DropboxException();
 		return json_decode($json);
+	}
+	
+
+	private static function getMetaFromHeaders(&$header_array)
+	{
+		return json_decode(substr(@array_shift(array_filter($header_array, create_function('$s', 'return strpos($s, "x-dropbox-metadata:") === 0;'))), 20));
 	}
 		
 

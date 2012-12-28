@@ -11,6 +11,10 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.3 =
+* cURL is used if installed, this fixes some issues with PHP HTTP wrapper using cURL
+* Fixed minor bugs
+
 = 1.2 =
 * Fixed query string parameters issues
 * Added GetLink() to sample.php

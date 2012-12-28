@@ -78,7 +78,8 @@ if(!empty($files)) {
 
 function store_token($token, $name)
 {
-	file_put_contents("tokens/$name.token", serialize($token));
+	if(!file_put_contents("tokens/$name.token", serialize($token)))
+		die('<br />Could not store token! <b>Make sure that the directory `tokens` exists and is writable!</b>');
 }
 
 function load_token($name)
