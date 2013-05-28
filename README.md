@@ -11,6 +11,13 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.4 =
+* New API functions: GetThumbnail, GetRevisions, Restore, Search and GetCopyRef 
+* Added $expires output parameter to GetLink function
+* Added $copy_ref parameter to Copy function
+* Added documentation to some functions
+* Added new functions to sample.php
+
 = 1.3 =
 * cURL is used if installed, this fixes some issues with PHP HTTP wrapper using cURL
 * Fixed minor bugs

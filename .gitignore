@@ -2,3 +2,5 @@
 /tokens/*.token
 /*.buildpath
 /*.project
+/old
+/nbproject/private/

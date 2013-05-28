@@ -6,12 +6,20 @@
  *
  * @author     Fabian Schlieper <fabian@fabi.me>
  * @copyright  Fabian Schlieper 2012
- * @version    1.0
+ * @version    1.1
  * @license    See license.txt
  *
  */
  
+
+// these 2 lines are just to enable error reporting and disable output buffering (don't include this in you application!)
 error_reporting(E_ALL);
+enable_implicit_flush();
+// -- end of unneeded stuff
+
+// if there are many files in your Dropbox it can take some time, so disable the max. execution time
+set_time_limit(0);
+
 require_once("DropboxClient.php");
 
 // you have to create an app at https://www.dropbox.com/developers/apps and enter details below:
@@ -26,6 +34,7 @@ $dropbox = new DropboxClient(array(
 $access_token = load_token("access");
 if(!empty($access_token)) {
 	$dropbox->SetAccessToken($access_token);
+	echo "loaded access token:";
 	print_r($access_token);
 }
 elseif(!empty($_GET['auth_callback'])) // are we coming from dropbox's auth page?
@@ -72,7 +81,23 @@ if(!empty($files)) {
 		
 	echo "\r\n\r\n<b>Uploading $test_file:</b>\r\n";
 	print_r($dropbox->UploadFile($test_file));
-	echo "\r\n done!";
+	echo "\r\n done!";	
+	
+	echo "\r\n\r\n<b>Revisions of $test_file:</b>\r\n";	
+	print_r($dropbox->GetRevisions($test_file));
+}
+	
+echo "\r\n\r\n<b>Searching for JPG files:</b>\r\n";	
+$jpg_files = $dropbox->Search("/", ".jpg", 5);
+if(empty($jpg_files))
+	echo "Nothing found.";
+else {
+	print_r($jpg_files);
+	$jpg_file = reset($jpg_files);
+
+	echo "\r\n\r\n<b>Thumbnail of $jpg_file->path:</b>\r\n";	
+	$img_data = base64_encode($dropbox->GetThumbnail($jpg_file->path));
+	echo "<img src=\"data:image/jpeg;base64,$img_data\" alt=\"Generating PDF thumbnail failed!\" style=\"border: 1px solid black;\" />";
 }
 
 
@@ -91,4 +116,18 @@ function load_token($name)
 function delete_token($name)
 {
 	@unlink("tokens/$name.token");
+}
+
+
+
+
+
+function enable_implicit_flush()
+{
+	@apache_setenv('no-gzip', 1);
+	@ini_set('zlib.output_compression', 0);
+	@ini_set('implicit_flush', 1);
+	for ($i = 0; $i < ob_get_level(); $i++) { ob_end_flush(); }
+	ob_implicit_flush(1);
+	echo "<!-- ".str_repeat(' ', 2000)." -->";
 }
