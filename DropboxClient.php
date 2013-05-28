@@ -331,6 +331,30 @@ class DropboxClient {
 		return $thumb;
 	}
 	
+	/**
+	* Get thumbnail for a specified image
+	*
+	* @access public
+	* @param $image_path string Path to the image
+	* @param $format string Image format of the thumbnail (jpeg or png)
+	* @param $size string Thumbnail size (xs, s, m, l, xl)
+	* @return mime/* Returns the thumbnail as image
+	*/
+	public function GetThumbnail($image_path, $size = 's', $format = 'jpeg', $echo = false)
+	{
+		$url = $this->cleanUrl(self::API_CONTENT_URL."thumbnails/$this->rootPath/$image_path");
+		$content = http_build_query(array('format' => $format, 'size' => $size),'','&');
+		$context = $this->createRequestContext($url, "GET", $content);
+		$thumb = file_get_contents($url, NULL, $context);
+	
+		if($echo) {
+			header('Content-type: image/'.$format);
+			echo $thumb;
+			return;
+		}
+		return $thumb;
+	}
+
 	
 	function GetLink($dropbox_file, $preview=true, $short=true, &$expires=null)
 	{
