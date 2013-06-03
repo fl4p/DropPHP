@@ -22,6 +22,8 @@ class DropboxClient {
 	const BUFFER_SIZE = 4096;
 	
 	const MAX_UPLOAD_CHUNK_SIZE = 150000000; // 150MB
+	
+	const UPLOAD_CHUNK_SIZE = 4000000; // 4MB
 
 	private $appParams;	
 	private $consumerToken;
@@ -262,11 +264,43 @@ class DropboxClient {
 	 */	
 	public function UploadFile($src_file, $dropbox_path='', $overwrite=true, $parent_rev=null)
 	{
-		if(filesize($src_file) > self::MAX_UPLOAD_CHUNK_SIZE)
-			throw new DropboxException("Cannot upload files larger than 150MB!");
-			
 		if(empty($dropbox_path)) $dropbox_path = basename($src_file);
 		elseif(is_object($dropbox_path) && !empty($dropbox_path->path)) $dropbox_path = $dropbox_path->path;
+		
+		if(filesize($src_file) > self::MAX_UPLOAD_CHUNK_SIZE)
+		{			
+			$fh = fopen($src_file,'rb');
+			if($fh === false)
+				throw new DropboxException();
+			
+			$upload_id = null;
+			$offset = 0;
+			
+			$prev_useCurl = $this->useCurl;
+			$this->useCurl = false;
+			
+			while(!feof($fh)) {			
+				$query = http_build_query(compact('upload_id', 'offset'),'','&');			
+				$url = $this->cleanUrl(self::API_CONTENT_URL."/chunked_upload")."?$query";
+
+				$content = fread($fh, self::UPLOAD_CHUNK_SIZE);
+				$context = $this->createRequestContext($url, "PUT", $content);
+				$offset += strlen($content);
+				unset($content);			
+				
+				$response = json_decode(file_get_contents($url, false, $context));
+				unset($context);
+				
+				if(empty($upload_id)) {
+					$upload_id = $response->upload_id;
+					if(empty($upload_id)) throw new DropboxException("Upload ID empty!");
+				}
+			}
+			
+			$this->useCurl = $prev_useCurl;
+				
+			return $this->apiCall("commit_chunked_upload/$this->rootPath/$dropbox_path", "POST", compact('overwrite','parent_rev','upload_id'), true);
+		}
 			
 		$query = http_build_query(array_merge(compact('overwrite', 'parent_rev'), array('locale' => $this->locale)),'','&');
 		$url = $this->cleanUrl(self::API_CONTENT_URL."/files_put/$this->rootPath/$dropbox_path")."?$query";
@@ -540,9 +574,9 @@ class DropboxClient {
 	}
 	
 	
-	function apiCall($path, $method, $params=array())
+	function apiCall($path, $method, $params=array(), $content_call=false)
 	{
-		$url = $this->cleanUrl(self::API_URL.$path);
+		$url = $this->cleanUrl(($content_call ? self::API_CONTENT_URL : self::API_URL).$path);
 		$content = http_build_query(array_merge(array('locale'=>$this->locale), $params),'','&');
 		$context = $this->createRequestContext($url, $method, $content);
 		$json = $this->useCurl ? self::execCurlAndClose($context) : file_get_contents($url, false, $context);

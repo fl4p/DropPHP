@@ -11,6 +11,9 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.5 =
+* Added support for chuncked uploads. Large files (>150MB) will automatically be uploaded in chunks.
+
 = 1.4 =
 * New API functions: GetThumbnail, GetRevisions, Restore, Search and GetCopyRef 
 * Added $expires output parameter to GetLink function
