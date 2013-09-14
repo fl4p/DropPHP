@@ -11,6 +11,9 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.6 =
+* API_CONTENT_URL changed to https fixing the download size mismatch error
+
 = 1.5 =
 * Added support for chuncked uploads. Large files (>150MB) will automatically be uploaded in chunks.
 
