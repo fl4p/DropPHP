@@ -13,6 +13,8 @@ Changelog
 -------
 = 1.6 =
 * API_CONTENT_URL changed to https fixing the download size mismatch error
+* Fixed cURL upload
+* Fixed parameters for API GET requests (GetThumbnail, GetFiles ...)
 
 = 1.5 =
 * Added support for chuncked uploads. Large files (>150MB) will automatically be uploaded in chunks.
