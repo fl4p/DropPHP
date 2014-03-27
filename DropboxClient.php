@@ -7,7 +7,7 @@
  * 
  * @author     Fabian Schlieper <fabian@fabi.me>
  * @copyright  Fabian Schlieper 2012
- * @version    1.6
+ * @version    1.7
  * @license    See LICENSE
  *
  */
@@ -59,7 +59,7 @@ class DropboxClient {
 	 */	
 	public function SetUseCUrl($use_it)
 	{
-		return ($this->useCurl = $use_it && function_exists('curl_init'));
+		return ($this->useCurl = ($use_it && function_exists('curl_init')));
 	}
 	
 	// ##################################################
@@ -220,7 +220,7 @@ class DropboxClient {
 			$response_headers = array();
 			self::execCurlAndClose($context, $response_headers);
 			fclose($fh);
-			$meta = self::getMetaFromHeaders($response_headers);
+			$meta = self::getMetaFromHeaders($response_headers, true);
 			$bytes_loaded = filesize($dest_path);
 		} else {
 			$rh = @fopen($url, 'rb', false, $context); // read binary
@@ -230,7 +230,7 @@ class DropboxClient {
 			
 			// get file meta from HTTP header
 			$s_meta = stream_get_meta_data($rh);
-			$meta = self::getMetaFromHeaders($s_meta['wrapper_data']);
+			$meta = self::getMetaFromHeaders($s_meta['wrapper_data'], true);
 			$bytes_loaded = 0;
 			while (!feof($rh)) {
 			  if(($s=fwrite($fh, fread($rh, self::BUFFER_SIZE))) === false) {
@@ -249,7 +249,7 @@ class DropboxClient {
 		}
 		
 		if($meta->bytes != $bytes_loaded)
-			throw new DropboxException("Download size mismatch! (header:{$meta->bytes} vs actual:{$bytes_loaded}");
+			throw new DropboxException("Download size mismatch! (header:{$meta->bytes} vs actual:{$bytes_loaded}; curl:{$this->useCurl})");
 			
 		return $meta;
 	}
@@ -266,6 +266,16 @@ class DropboxClient {
 	{
 		if(empty($dropbox_path)) $dropbox_path = basename($src_file);
 		elseif(is_object($dropbox_path) && !empty($dropbox_path->path)) $dropbox_path = $dropbox_path->path;
+		
+		// make sure the dropbox_path is not a dir. if it is, append baseneme of $src_file
+		$dropbox_bn = basename($dropbox_path);
+		if(strpos($dropbox_bn,'.') === false) { // check if ext. is missing -> could be a directory!
+			try {
+				$meta = $this->GetMetadata($dropbox_path);
+				if($meta && $meta->is_dir)
+					$dropbox_path = $dropbox_path . '/'. basename($src_file);
+			} catch(Exception $e) {}
+		}
 		
 		$file_size = filesize($src_file);
 		
@@ -306,6 +316,8 @@ class DropboxClient {
 				}
 				unset($context);
 				
+				self::checkForError($response);
+				
 				if(empty($upload_id)) {
 					$upload_id = $response->upload_id;
 					if(empty($upload_id)) throw new DropboxException("Upload ID empty!");
@@ -331,7 +343,7 @@ class DropboxClient {
 			curl_setopt($context, CURLOPT_INFILESIZE, filesize($src_file));
 			$meta = json_decode(self::execCurlAndClose($context));
 			fclose($fh);
-			return $meta;
+			return self::checkForError($meta);
 		} else {
 			$content = file_get_contents($src_file);
 			if(strlen($content) == 0)
@@ -339,7 +351,7 @@ class DropboxClient {
 				
 			$context = $this->createRequestContext($url, "PUT", $content);
 			
-			return json_decode(file_get_contents($url, false, $context));
+			return self::checkForError(json_decode(file_get_contents($url, false, $context)));
 		}
 	}
 	
@@ -588,6 +600,13 @@ class DropboxClient {
 		return $data;
 	}
 	
+	private static function checkForError($resp)
+	{
+		if(!empty($resp->error))
+			throw new DropboxException($resp->error);		
+		return $resp;
+	}
+	
 	
 	private function apiCall($path, $method, $params=array(), $content_call=false)
 	{
@@ -604,15 +623,18 @@ class DropboxClient {
 		//if($json === false)
 //			throw new DropboxException();
 		$resp = json_decode($json);
-		if(!empty($resp->error))
-			throw new DropboxException($resp->error);
-		return $resp;		
+		return self::checkForError($resp);		
 	}
 	
 
-	private static function getMetaFromHeaders(&$header_array)
+	private static function getMetaFromHeaders(&$header_array, $throw_on_error=false)
 	{
-		return json_decode(substr(@array_shift(array_filter($header_array, create_function('$s', 'return strpos($s, "x-dropbox-metadata:") === 0;'))), 20));
+		$obj = json_decode(substr(@array_shift(array_filter($header_array, create_function('$s', 'return stripos($s, "x-dropbox-metadata:") === 0;'))), 20));
+		if($throw_on_error && (empty($obj)||!is_object($obj)))
+			throw new DropboxException("Could not retrieve meta data from header data: ".print_r($header_array,true));
+		if($throw_on_error)
+			self::checkForError ($obj);
+		return $obj;
 	}
 		
 

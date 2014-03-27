@@ -11,6 +11,10 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+= 1.7 =
+* Errors in server response after download  & upload will be thrown
+* UploadFile checks if the $dropbox_path is an existing directory and puts the file there if so
+
 = 1.6 =
 * API_CONTENT_URL changed to https fixing the download size mismatch error
 * Fixed cURL upload
