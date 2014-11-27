@@ -6,8 +6,8 @@
  * 
  * 
  * @author     Fabian Schlieper <fabian@fabi.me>
- * @copyright  Fabian Schlieper 2012
- * @version    1.7
+ * @copyright  Fabian Schlieper 2014
+ * @version    1.7.1
  * @license    See LICENSE
  *
  */
@@ -51,6 +51,9 @@ class DropboxClient {
 		$this->useCurl = function_exists('curl_init');
 	}
 	
+	function __wakeup() {
+		$this->useCurl = $this->useCurl && function_exists('curl_init');
+	}
     /** 
 	 * Sets whether to use cURL if its available or PHP HTTP wrappers otherwise
 	 * 
@@ -325,8 +328,6 @@ class DropboxClient {
 			}
 			
 			@fclose($fh);
-			
-			$this->useCurl = $prev_useCurl;
 				
 			return $this->apiCall("commit_chunked_upload/$this->rootPath/$dropbox_path", "POST", compact('overwrite','parent_rev','upload_id'), true);
 		}

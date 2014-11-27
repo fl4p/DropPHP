@@ -11,6 +11,10 @@ Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropb
 
 Changelog
 -------
+
+= 1.7.1 =
+* Check cURL availability on wakeup after object serialization
+
 = 1.7 =
 * Errors in server response after download  & upload will be thrown
 * UploadFile checks if the $dropbox_path is an existing directory and puts the file there if so
