@@ -294,29 +294,17 @@ class DropboxClient {
 			
 			while(!feof($fh)) {				
 				$url = $this->cleanUrl(self::API_CONTENT_URL."/chunked_upload").'?'.http_build_query(compact('upload_id', 'offset'),'','&');
+				$content = fread($fh, self::UPLOAD_CHUNK_SIZE);
+				$context = $this->createRequestContext($url, "PUT", $content);
 				
 				if($this->useCurl) {				
-					$context = $this->createRequestContext($url, "PUT");
 					curl_setopt($context, CURLOPT_BINARYTRANSFER, true);
-					curl_setopt($context, CURLOPT_PUT, 1);
-					curl_setopt($context, CURLOPT_INFILE, $fh);			
-					$chunk_size = min(self::UPLOAD_CHUNK_SIZE, $file_size - $offset);
-					$offset += $chunk_size;			
-					curl_setopt($context, CURLOPT_INFILESIZE, $chunk_size);
 					$response = json_decode(self::execCurlAndClose($context));
-					
-					fseek($fh,$offset);
-					if($offset >= $file_size)
-						break;
 				} else {
-					$content = fread($fh, self::UPLOAD_CHUNK_SIZE);
-				
-					$context = $this->createRequestContext($url, "PUT", $content);
-					$offset += strlen($content);
-					unset($content);			
-					
 					$response = json_decode(file_get_contents($url, false, $context));
 				}
+				$offset += strlen($content);
+				unset($content);			
 				unset($context);
 				
 				self::checkForError($response);
@@ -325,6 +313,8 @@ class DropboxClient {
 					$upload_id = $response->upload_id;
 					if(empty($upload_id)) throw new DropboxException("Upload ID empty!");
 				}
+				if($offset >= $file_size)
+					break;
 			}
 			
 			@fclose($fh);
