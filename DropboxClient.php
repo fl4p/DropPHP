@@ -587,9 +587,9 @@ class DropboxClient
 
         if (strpos($url, self::API_CONTENT_URL) === false)
             $http_context['header'] .= "Content-Length: " . strlen($http_context['content']);
-        echo $url;
+        //echo $url;
         $http_context['header'] = trim($http_context['header']);
-        print_r($http_context);
+       // print_r($http_context);
         return $this->useCurl ? $this->createCurl($url, $http_context) : stream_context_create(array('http' => $http_context));
     }
 
