@@ -500,6 +500,14 @@ class DropboxClient {
 
 		$curl_opts[CURLOPT_HTTPHEADER] = array_map('trim',explode("\n",$http_context['header']));
 
+		//Set proxy
+		if (!empty($this->appParams['proxy_url'])) {
+			$curl_opts[CURLOPT_PROXY] = $this->appParams['proxy_url']; 
+			if (!empty($this->appParams['proxy_user'])) {
+				$curl_opts[CURLOPT_PROXYUSERPWD] = $this->appParams['proxy_user'] . ":" . $this->appParams['proxy_password'];
+			}
+		}
+		
 		curl_setopt_array($ch, $curl_opts);
 		return $ch;
 	}
@@ -575,6 +583,14 @@ class DropboxClient {
 		//print_r($signed);
 
 		$http_context['header'] .= "Authorization: ".$signed['header']."\r\n";
+		
+		// set up proxy
+		if (!empty($this->appParams['proxy_url'])) {
+			$http_context['proxy'] = $this->appParams['proxy_url'];
+			if (!empty($this->appParams['proxy_user'])) {
+				$http_context['header'] .= "Proxy-Authorization: Basic " . base64_encode($this->appParams['proxy_user'] . ":" . $this->appParams['proxy_password']) . "\r\n";
+			}
+		}
 
 		return $this->useCurl ? $this->createCurl($url, $http_context) : stream_context_create(array('http'=>$http_context));
 	}
