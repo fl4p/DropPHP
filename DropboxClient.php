@@ -1,14 +1,14 @@
 <?php
 
 /**
- * DropPHP - A simple Dropbox client that works without cURL.
+ * DropPHP v2 - A simple Dropbox client that works without cURL.
  *
  * http://fabi.me/en/php-projects/dropphp-dropbox-api-client/
  *
  *
  * @author     Fabian Schlieper <fabian@fabi.me>
- * @copyright  Fabian Schlieper 2014
- * @version    1.7.1
+ * @copyright  Fabian Schlieper 2017
+ * @version    2.0.0
  * @license    See LICENSE
  *
  */
@@ -412,14 +412,16 @@ class DropboxClient
         }
     }
 
-    function Delta($cursor, $path_prefix)
+    function Delta($cursor)
     {
-        return $this->apiCall("delta", "POST", compact('cursor', 'path_prefix'));
+        return $this->apiCall("2/files/list_folder/continue", "POST", array_merge(compact('cursor'), array(
+            'recursive' => true
+        )));
     }
 
-    function LatestCursor($path_prefix = null, $include_media_info = false)
+    function LatestCursor($path = '', $include_media_info = false)
     {
-        $res = $this->apiCall("delta/latest_cursor", "POST", compact('path_prefix', 'include_media_info'));
+        $res = $this->apiCall("2/files/list_folder/get_latest_cursor", "POST", compact('path', 'include_media_info'));
         return $res->cursor;
     }
 
@@ -483,7 +485,7 @@ class DropboxClient
     function Delete($path)
     {
         if (is_object($path) && !empty($path->path)) $path = $path->path;
-        return $this->apiCall("fileops/delete", "POST", array('locale' => null, 'root' => $this->rootPath, 'path' => $path));
+        return $this->apiCall("2/files/delete_v2", "POST", array('path' => $path));
     }
 
     function Move($from_path, $to_path)
@@ -601,9 +603,7 @@ class DropboxClient
         return $resp;
     }
 
-
-    private
-    function apiCall($path, $params = array(), $content_call = false, &$content = null)
+    private function doSingleCall($path, $params = array(), $content_call = false, &$content = null)
     {
         $url = $this->cleanUrl(($content_call ? self::API_CONTENT_URL : self::API_URL) . $path);
         $context = $this->createRequestContext($url, $params, $content);
@@ -612,6 +612,40 @@ class DropboxClient
         $resp = json_decode($json);
         if (($resp === false || is_null($resp)) && !empty($json) && !$content_call) throw new DropboxException("Error apiCall($path): $json");
         return self::checkForError($resp, "apiCall($path)");
+    }
+
+
+    private static function mergeContinue(&$target, $part)
+    {
+        $keys = array_keys(get_object_vars($target));
+        foreach ($keys as $k) {
+            if(is_array($target->$k) && !empty($part->$k) && is_array($part->$k)) {
+                $target->$k = array_merge($target->$k, $part->$k);
+            }
+        }
+        $target->has_more = $part->has_more;
+        $target->cursor = $part->cursor;
+    }
+
+
+    private
+    function apiCall($path, $params = array(), $content_call = false, &$content = null)
+    {
+        $resp = $this->doSingleCall($path, $params, $content_call, $content);
+
+        // check for 'has_more' and run /continue requests
+        if(!empty($resp->has_more) && strpos($path, '/continue') === false) {
+            $path .= '/continue';
+        }
+
+        while(!$content_call && !empty($resp->has_more)) {
+            if(empty($resp->cursor))
+                throw new DropboxException("Unexpected response from $path: has_more without cursor!");
+            $params['cursor'] = is_string($resp->cursor) ? $resp->cursor : $resp->cursor->value;
+            self::mergeContinue($resp, $this->doSingleCall($path, $params, $content_call, $content));
+        }
+
+        return $resp;
     }
 
 
