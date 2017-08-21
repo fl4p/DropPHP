@@ -348,7 +348,7 @@ class DropboxClient
             return $this->apiCall('2/files/upload_session/finish', array(
                 'cursor' => compact('session_id', 'offset'),
                 'commit' => $commit_params
-            ));
+            ), true);
         } else {
             return $this->apiCall("2/files/upload", $commit_params, true, file_get_contents($src_file));
         }
