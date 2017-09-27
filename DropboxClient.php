@@ -480,7 +480,7 @@ class DropboxClient
      */
     function CreateFolder($path)
     {
-        return $this->apiCall("fileops/create_folder",
+        return $this->apiCall("2/files/create_folder_v2",
             array('root' => $this->rootPath, 'path' => $path));
     }
 
