@@ -283,9 +283,9 @@ class DropboxClient
 
     static function compatMeta($meta)
     {
-        $meta->is_dir = !isset($meta->size) || is_null($meta->size);
+        $meta->is_dir = $meta->{'.tag'} == "folder";
         $meta->path = $meta->path_display;
-        $meta->bytes = $meta->size;
+        $meta->bytes = isset($meta->size) ? $meta->size : 0;
         return $meta;
     }
 
