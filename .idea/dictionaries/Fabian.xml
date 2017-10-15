@@ -2,6 +2,7 @@
   <dictionary name="Fabian">
     <words>
       <w>autorename</w>
+      <w>chunked</w>
       <w>compat</w>
       <w>curlopt</w>
       <w>dropboxapi</w>

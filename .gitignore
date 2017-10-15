@@ -6,3 +6,6 @@
 /nbproject/private/
 /.idea/workspace.xml
 /.idea/modules.xml
+*.token
+*.phar
+/.idea/deployment.xml
