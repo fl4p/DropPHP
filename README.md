@@ -1,13 +1,21 @@
 DropPHP Dropbox API Class
 ===============================
 
-DropPHP provides a simple interface for Dropbox's REST API to list, download and upload files.
+DropPHPÂ provides a simple interface for Dropbox's REST API to list, download and upload files.
 
-For authentication it uses OAuthSimple, HTTPS requests are made with PHP's built in stream wrapper. It does not require any special PHP librarys like PEAR, cURL or OAUTH.
+For authentication it uses OAuthSimple,Â HTTPS requests are made with PHP's built in stream wrapper. It does not require any special PHP librarys like PEAR, cURL or OAUTH.
 
 See sample.php for a basic demonstration.
 
 Basic documentation can be found at http://fabi.me/en/php-projects/dropphp-dropbox-api-client/
+
+
+### F.A.Q ###
+**How to use 'Generated access token':**
+``` 
+$token = array('t' => 'GENERATED_TOKEN_HERE');
+$dropbox->SetBearerToken($token); 
+```
 
 Changelog
 -------
